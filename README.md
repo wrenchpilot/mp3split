@@ -7,7 +7,7 @@
 ./mp3split.sh [TIMESTAMP_FILE] [MP3_FILE]
 ```
 
-# Timestame File Format Example
+# Timestamp File Format Example
 *  https://www.youtube.com/watch?v=uQ681eG8qfQ
 ```txt
 0:00 Ch Check Out Ya Neck
