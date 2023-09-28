@@ -28,3 +28,4 @@
 
 # Requirements
  * [ffmpeg](https://ffmpeg.org)
+ * [yt-dlp](https://github.com/yt-dlp/yt-dlp) (optional 😎)
