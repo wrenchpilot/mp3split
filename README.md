@@ -25,3 +25,6 @@
 35:30 Hold The Iron Mic (Interlude)
 36:16 House of Flying Shots
 ```
+
+# Requirements
+ * [ffmpeg](https://ffmpeg.org)
