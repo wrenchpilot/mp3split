@@ -1,14 +1,18 @@
 # mp3split.sh
-* Based on Reddit comment by https://old.reddit.com/user/bayarookie
-* https://old.reddit.com/r/ffmpeg/comments/jn6sny/split_audio_file_into_smaller_file_based_on/gb0mumn/
 
-# Usage
+* Based on Reddit comment by <https://old.reddit.com/user/bayarookie>
+* <https://old.reddit.com/r/ffmpeg/comments/jn6sny/split_audio_file_into_smaller_file_based_on/gb0mumn/>
+
+## Usage
+
 ```bash
-./mp3split.sh [TIMESTAMP_FILE] [MP3_FILE]
+./mp3split.sh TIMESTAMP_FILE MP3_FILE
 ```
 
-# Timestamp File Format Example
-*  https://www.youtube.com/watch?v=uQ681eG8qfQ
+## Timestamp File Format Example
+
+* <https://www.youtube.com/watch?v=uQ681eG8qfQ>
+
 ```txt
 0:00 Ch Check Out Ya Neck
 3:21 Da Mystery of Intergalactic Boxing
@@ -26,6 +30,16 @@
 36:16 House of Flying Shots
 ```
 
-# Requirements
- * [ffmpeg](https://ffmpeg.org)
- * [yt-dlp](https://github.com/yt-dlp/yt-dlp) (optional 😎)
+Blank lines and lines starting with `#` are ignored. Every other line must use the format:
+
+```txt
+TIMESTAMP Track Title
+```
+
+Output filenames are sanitized for filesystem safety and prefixed with a zero-padded track number like `01 - Intro.mp3`. If multiple tracks sanitize to the same name, the script adds a numeric suffix instead of overwriting an earlier output.
+
+## Requirements
+
+* [ffmpeg](https://ffmpeg.org)
+* `ffprobe` (usually installed with ffmpeg)
+* [yt-dlp](https://github.com/yt-dlp/yt-dlp) (optional 😎)
