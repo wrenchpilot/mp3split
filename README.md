@@ -14,6 +14,9 @@
 * <https://www.youtube.com/watch?v=uQ681eG8qfQ>
 
 ```txt
+# ARTIST: Wu-Tang Clan Vs. Beastie Boys
+# ALBUM: Wu-Tang Clan Vs. Beastie Boys
+# YEAR: 2021
 0:00 Ch Check Out Ya Neck
 3:21 Da Mystery of Intergalactic Boxing
 6:50 Flute Man
@@ -36,7 +39,28 @@ Blank lines and lines starting with `#` are ignored. Every other line must use t
 TIMESTAMP Track Title
 ```
 
-Output filenames are sanitized for filesystem safety and prefixed with a zero-padded track number like `01 - Intro.mp3`. If multiple tracks sanitize to the same name, the script adds a numeric suffix instead of overwriting an earlier output.
+Structured metadata headers are supported at the top of the file:
+
+```txt
+# ARTIST: Chipmunks on 16 Speed
+# ALBUM: Sludge Never Dies
+# YEAR: 2021
+```
+
+Output files are written into a metadata-based directory tree:
+
+```txt
+ARTIST/ALBUM (YEAR)/01 - Track Title.mp3
+```
+
+Directory and file names are sanitized for filesystem safety. If multiple tracks sanitize to the same name, the script adds a numeric suffix instead of overwriting an earlier output. Missing `ARTIST` or `ALBUM` headers fall back to `Unknown Artist` and `Unknown Album`.
+
+Each output file keeps the source metadata by default, then overrides:
+
+* `title` with the track title from the timestamp file
+* `track` with the generated track number and total, like `1/10`
+* `artist`, `album`, and `year` when those headers are present
+* embedded album art when the source file contains an attached picture stream
 
 ## Requirements
 

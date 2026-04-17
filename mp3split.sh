@@ -117,15 +117,16 @@ output_path_reserved() {
 }
 
 next_output_path() {
-    local track_number=$1
-    local stem=$2
+    local base_dir=$1
+    local track_number=$2
+    local stem=$3
     local candidate
     local suffix=2
 
-    printf -v candidate '%02d - %s.mp3' "$track_number" "$stem"
+    printf -v candidate '%s/%02d - %s.mp3' "$base_dir" "$track_number" "$stem"
 
     while [[ -e $candidate ]] || output_path_reserved "$candidate"; do
-        printf -v candidate '%02d - %s-%d.mp3' "$track_number" "$stem" "$suffix"
+        printf -v candidate '%s/%02d - %s-%d.mp3' "$base_dir" "$track_number" "$stem" "$suffix"
         ((suffix++))
     done
 
@@ -160,11 +161,26 @@ duration=$(trim_whitespace "$duration")
 [[ -n $duration ]] || die "ffprobe returned an empty duration for: $audio_file"
 is_valid_timestamp "$duration" || die "ffprobe returned an invalid duration: $duration"
 
+attached_picture_stream=$(
+    ffprobe \
+        -v error \
+        -select_streams v \
+        -show_entries stream=index:stream_disposition=attached_pic \
+        -of csv=p=0 \
+        -- "$audio_file" |
+    awk -F',' '$2 == 1 { print $1; exit }'
+) || die "Unable to inspect album art streams with ffprobe: $audio_file"
+
 duration_ms=$(timestamp_to_milliseconds "$duration")
 
 start_times=()
+track_titles=()
+sanitized_titles=()
 output_paths=()
 planned_outputs=()
+artist_name=
+album_title=
+year_value=
 
 line_number=0
 previous_ms=-1
@@ -173,7 +189,33 @@ while IFS= read -r raw_line || [[ -n $raw_line ]]; do
 
     line=$(trim_whitespace "$raw_line")
 
-    if [[ -z $line || ${line:0:1} == '#' ]]; then
+    if [[ -z $line ]]; then
+        continue
+    fi
+
+    if [[ ${line:0:1} == '#' ]]; then
+        comment_text=$(trim_whitespace "${line#\#}")
+
+        if [[ -n $comment_text ]]; then
+            if [[ $comment_text =~ ^([^:]+):[[:space:]]*(.+)$ ]]; then
+                metadata_key=$(trim_whitespace "${BASH_REMATCH[1]}")
+                metadata_value=$(trim_whitespace "${BASH_REMATCH[2]}")
+                metadata_key=$(printf '%s' "$metadata_key" | tr '[:lower:]' '[:upper:]')
+
+                case "$metadata_key" in
+                    ARTIST)
+                        artist_name=$metadata_value
+                        ;;
+                    ALBUM)
+                        album_title=$metadata_value
+                        ;;
+                    YEAR)
+                        year_value=$metadata_value
+                        ;;
+                esac
+            fi
+        fi
+
         continue
     fi
 
@@ -194,16 +236,33 @@ while IFS= read -r raw_line || [[ -n $raw_line ]]; do
 
     previous_ms=$current_ms
     sanitized_title=$(sanitize_output_name "$title")
-    next_output_path "$(( ${#start_times[@]} + 1 ))" "$sanitized_title"
 
     start_times+=("$timestamp")
-    output_paths+=("$next_output_path_result")
+    track_titles+=("$title")
+    sanitized_titles+=("$sanitized_title")
 done < "$timestamp_file"
 
 (( ${#start_times[@]} > 0 )) || die "Timestamp file did not contain any valid entries: $timestamp_file"
 
+track_total=${#start_times[@]}
+
+artist_dir=$(sanitize_output_name "${artist_name:-Unknown Artist}")
+album_dir=$(sanitize_output_name "${album_title:-Unknown Album}")
+if [[ -n ${year_value:-} ]]; then
+    album_dir="${album_dir} (${year_value})"
+fi
+
+output_dir="${artist_dir}/${album_dir}"
+mkdir -p -- "$output_dir"
+
+for i in "${!sanitized_titles[@]}"; do
+    next_output_path "$output_dir" "$((i + 1))" "${sanitized_titles[i]}"
+    output_paths+=("$next_output_path_result")
+done
+
 for i in "${!start_times[@]}"; do
     next_index=$((i + 1))
+    track_number=$((i + 1))
 
     if (( next_index < ${#start_times[@]} )); then
         end_time=${start_times[next_index]}
@@ -212,5 +271,44 @@ for i in "${!start_times[@]}"; do
     fi
 
     printf 'Writing %s\n' "${output_paths[i]}"
-    ffmpeg -n -ss "${start_times[i]}" -to "$end_time" -i "$audio_file" -c copy "${output_paths[i]}"
+    ffmpeg_cmd=(
+        ffmpeg
+        -n
+        -ss "${start_times[i]}"
+        -to "$end_time"
+        -i "$audio_file"
+        -map 0:a
+        -map_chapters -1
+        -c copy
+        -id3v2_version 3
+        -write_id3v1 1
+        -map_metadata 0
+        -metadata "title=${track_titles[i]}"
+        -metadata "track=${track_number}/${track_total}"
+    )
+
+    if [[ -n ${attached_picture_stream:-} ]]; then
+        ffmpeg_cmd+=(
+            -map "0:${attached_picture_stream}"
+            -disposition:v:0 attached_pic
+        )
+    fi
+
+    if [[ -n ${album_title:-} ]]; then
+        ffmpeg_cmd+=(-metadata "album=$album_title")
+    fi
+
+    if [[ -n ${artist_name:-} ]]; then
+        ffmpeg_cmd+=(-metadata "artist=$artist_name")
+    fi
+
+    if [[ -n ${year_value:-} ]]; then
+        ffmpeg_cmd+=(
+            -metadata "date=$year_value"
+            -metadata "year=$year_value"
+        )
+    fi
+
+    ffmpeg_cmd+=("${output_paths[i]}")
+    "${ffmpeg_cmd[@]}"
 done
